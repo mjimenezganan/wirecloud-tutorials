@@ -4,16 +4,54 @@
 
 The first task is to launch the Identity Manager and to create two applications on it that will authenticate against its users: ckan and wirecloud.
 
-For launching only the IdM (using configs on `keyrock-env.sh` such as disable HTTPS):
+For launching only the IdM (using configs on Keyrock section of `.env`` such as disable HTTPS):
 
-    source keyrock-env.sh
     docker-compose up -d keyrock
 
 Open a browser on `https://keyrock:3443`, dodge the security warning and enter with default credentials `admin@test.com` and `1234`.
 
 > Your Keyrock instance does have only the default admin user. Please update it and/or create additional users by following the [Identity-Management](https://github.com/Fiware/tutorials.Identity-Management) tutorial.
 
-## 2. Launch CKAN
+
+## 2. Launch WireCloud
+
+WireCloud can use its own user database, but it can also use Keyrock IdM for that purpose. For connecting WireCloud with Keyrock, on this latter a new application is to be created. The parameters for creating a new application for authenticating WireCloud users are:
+
+![Create WireCloud application](tutorial-images/create-application-wirecloud.png)
+
+* URL: `<wc-server>`, ej: `http://wirecloud`
+* Callback URL: `<wcc-server>/complete/fiware/`, ej: `http://wirecloud/complete/firewall/`
+
+    > Please note the `/` in the end of the Callback URL, it is required.
+
+In this case, the default roles `Provider` and `Purchaser` are not enough, and a new role `admin` has to be created (or in the application creation wizard or in the application role management section. This role is to be assigned to authorized users that we want to become WireCloud administrators.
+
+Look for the oauth2 credentials in the description of the created application. The important contents are the strings of the **Client ID** and the **Client Secret**.
+
+![Oauth2 credentials](tutorial-images/wirecloud-oauth2-credentials.png)
+
+These credentials are to be inserted in the WireCloud image upon its startup. For doing so, WireCloud services on the `docker-compose.yml` use the WireCloud section of `.env` for defining environment variables. Edit the file `.env` and paste those strings on the `SOCIAL_AUTH_FIWARE_KEY` and `SOCIAL_AUTH_FIWARE_SECRET` respectively:
+
+    SOCIAL_AUTH_FIWARE_KEY=fa07fcaa-68ac-4187-b909-eaac3c1533e5
+    SOCIAL_AUTH_FIWARE_SECRET=8705be86-6a83-4ceb-a50a-2afd11ad044c
+
+`wirecloud`  service can now be started. Configurations are described in the WireCloud section of the `.env` file:
+
+    docker-compose up -d wirecloud
+
+WireCloud instance is running in `http://wirecloud`. Login with one of the existing Keyrock users and do authorize the application:
+
+![Authorize CKAN application](tutorial-images/authorize-ckan.png)
+
+**Create a superuser**
+
+It is recommended to create a superuser. In an standalone application it is done through the command `manage.py createsuperuser` (possibly using `exec` docker commands). But in a WireCloud instance linked to an IdM, it has to be done assigning the previously created role `admin` to a user (that has to have logged previously).
+
+Open Keyrock interface and access the application created for authenticating WireCloud. In the _authorized users_ section click the button `Authorize` and assign to the desired user(s) the `admin` role.
+
+![Assign the admin role](tutorial-images/assign-admin-role.png)
+
+## 3. Launch CKAN
 
 CKAN instance is going to be authenticated against the keyrock IdM. For doing so, create an application for CKAN in keyrock, on the applications section of the main menu or in the Applications section. Use the following data:
 
@@ -28,14 +66,13 @@ Look for the oauth2 credentials in the description of the created application. T
 
 ![Oauth2 credentials](tutorial-images/ckan-oauth2-credentials.png)
 
-These credentials are to be inserted in the CKAN image upon its startup. For doing so, CKAN services on the `docker-compose.yml` use a file for defining environment variables. Edit the file `ckan-env.sh` and paste those strings on the `CKAN_OAUTH2_CLIENT_ID` and `CKAN_OAUTH2_CLIENT_SECRET` respectively:
+These credentials are to be inserted in the CKAN image upon its startup. For doing so, CKAN services on the `docker-compose.yml` uses the CKAN section of `.env` file for defining environment variables. Edit the file `.env` and paste those strings on the `CKAN_OAUTH2_CLIENT_ID` and `CKAN_OAUTH2_CLIENT_SECRET` respectively:
 
-    export CKAN_OAUTH2_CLIENT_ID=931a4c6f-8778-4716-8555-68ada3930249
-    export CKAN_OAUTH2_CLIENT_SECRET=0b7d26c9-62ab-492a-9ceb-98038581b594
+    CKAN_OAUTH2_CLIENT_ID=931a4c6f-8778-4716-8555-68ada3930249
+    CKAN_OAUTH2_CLIENT_SECRET=0b7d26c9-62ab-492a-9ceb-98038581b594
 
 CKAN service can now be started. Prior to that, the file `ckan-env.sh` has to be executed so as it defines the environment variables in the shell session:
 
-    source ckan-env.sh
     docker-compose up -d ckan
 
 CKAN instance is running in `http://ckan:5000`. Login with one of the existing Keyrock users and do authorize the ckan application:
@@ -60,44 +97,7 @@ After that, the logged user should be able to create a new dataset:
 
 ![Create a dataset in CKAN](tutorial-images/create-dataset.png)
 
-## 3. Launch WireCloud
-
-WireCloud can use its own user database, but it can also use Keyrock IdM for that purpose. For connecting WireCloud with Keyrock, on this latter a new application is to be created. The parameters for creating a new application for authenticating WireCloud users are:
-
-![Create WireCloud application](tutorial-images/create-application-wirecloud.png)
-
-* URL: `<wc-server>`, ej: `http://wirecloud`
-* Callback URL: `<wcc-server>/complete/fiware/`, ej: `http://wirecloud/complete/firewall/`
-
-    > Please note the `/` in the end of the Callback URL, it is required.
-
-In this case, the default roles `Provider` and `Purchaser` are not enough, and a new role `admin` has to be created (or in the application creation wizard or in the application role management section. This role is to be assigned to authorized users that we want to become WireCloud administrators.
-
-Look for the oauth2 credentials in the description of the created application. The important contents are the strings of the **Client ID** and the **Client Secret**.
-
-![Oauth2 credentials](tutorial-images/wirecloud-oauth2-credentials.png)
-
-These credentials are to be inserted in the WireCloud image upon its startup. For doing so, WireCloud services on the `docker-compose.yml` use a file for defining environment variables. Edit the file `wirecloud-env.sh` and paste those strings on the `SOCIAL_AUTH_FIWARE_KEY` and `SOCIAL_AUTH_FIWARE_SECRET` respectively:
-
-    export SOCIAL_AUTH_FIWARE_KEY=fa07fcaa-68ac-4187-b909-eaac3c1533e5
-    export SOCIAL_AUTH_FIWARE_SECRET=8705be86-6a83-4ceb-a50a-2afd11ad044c
-
-`wirecloud`  service can now be started. Prior to that, the file `wirecloud-env.sh` has to be executed so as it defines the environment variables in the shell session:
-
-    source wirecloud-env.sh
-    docker-compose up -d wirecloud
-
-WireCloud instance is running in `http://wirecloud`. Login with one of the existing Keyrock users and do authorize the application:
-
-![Authorize CKAN application](tutorial-images/authorize-ckan.png)
-
-**Create a superuser**
-
-It is recommended to create a superuser. In an standalone application it is done through the command `manage.py createsuperuser` (possibly using `exec` docker commands). But in a WireCloud instance linked to an IdM, it has to be done assigning the previously created role `admin` to a user (that has to have logged previously).
-
-Open Keyrock interface and access the application created for authenticating WireCloud. In the _authorized users_ section click the button `Authorize` and assign to the desired user(s) the `admin` role.
-
-![Assign the admin role](tutorial-images/assign-admin-role.png)
+### 5. CKAN and WireCloud connections
 
 **Create a dashboard for the wizard**
 
@@ -115,13 +115,9 @@ Finally, the dashboard must be made **public**. On the `share` option of the das
 
 **Re-launch CKAN so as its extension make use of it**
 
-If your dashboard is not `admin/dashcreator` (you might have chosen a different name or used a different user),  did choose a diferent name than `admin/dashcreator` (or a different user), please edit the `CKAN_WIRECLOUD_VIEW_EDITOR_DASHBOARD` property on `ckan-env.sh`, reload those settings and re-start the containers:
+If your dashboard is not `admin/dashcreator` (you might have chosen a different name or used a different user),  did choose a diferent name than `admin/dashcreator` (or a different user), please edit the `CKAN_WIRECLOUD_VIEW_EDITOR_DASHBOARD` property on CKAN section of `.env`, reload those settings and re-start the containers:
 
-    source ckan-env.sh
-    docker-compose stop
-    docker-compose up -d
-
-TODO: Migrate environment variables to a (or several) `.env` files as in [https://stackoverflow.com/questions/42149529/how-to-reload-environment-variables-in-docker-compose-container-with-minimum-dow](https://stackoverflow.com/questions/42149529/how-to-reload-environment-variables-in-docker-compose-container-with-minimum-dow)
+    docker-compose restart ckan
 
 ## 4. Link to NGSI data in CKAN
 
@@ -139,7 +135,7 @@ After doing so, the resource can be visualized through the NGSI CKAN extension, 
 
 # Considerations
 
-The structure of `docker-compose.yml` containing every serevice, tue usage of environmental variable for the options and the requirement of modifying the `/etc/hosts` file is intentional for the sake of simplicity in the tutorial. This strategy is only for testing and learning purposes, and may not be the best one in production.
+The structure of `docker-compose.yml` containing every serevice, tue usage of `.env` environmental variables file for the options and the requirement of modifying the `/etc/hosts` file is intentional for the sake of simplicity in the tutorial. This strategy is only for testing and learning purposes, and may not be the best one in production.
 
 # Errors
 
