@@ -1,0 +1,192 @@
+version: '3.1' 
+
+services:
+
+    ckan:
+        restart: always
+        image: fiware/ckan-extended
+        #image: ckan_permissioned
+        ports:
+            - 5000:5000
+        depends_on:
+            - ckan_postgres
+            - ckan_solr
+            - ckan_redis
+            - ckan_datapusher
+            - keyrock
+        volumes:
+            - ./volumes/ckan-data:/opt/ckan
+        environment:
+            # Basic Configuration parameters
+            # Defaults work with linked containers, change to use own Postgres, SolR, Redis or Datapusher
+            - CKAN_SQLALCHEMY_URL=postgresql://ckan:${POSTGRES_PASSWORD}@ckan_postgres/ckan
+            - CKAN_DATASTORE_WRITE_URL=postgresql://ckan:${POSTGRES_PASSWORD}@ckan_postgres/datastore
+            - CKAN_DATASTORE_READ_URL=postgresql://datastore_ro:${DATASTORE_READONLY_PASSWORD}@ckan_postgres/datastore
+            - CKAN_SOLR_URL=http://ckan_solr:8983/solr/ckan
+            - CKAN_REDIS_URL=redis://ckan_redis:6379/1
+            - CKAN_DATAPUSHER_URL=http://ckan_datapusher:8800
+            - CKAN_SITE_URL=${CKAN_SITE_URL}
+            - CKAN_MAX_UPLOAD_SIZE_MB=${CKAN_MAX_UPLOAD_SIZE_MB}
+            - CKAN_VERIFY_REQUESTS=True
+
+            # OAuth2
+            - CKAN_OAUTH2_REGISTER_URL=${CKAN_OAUTH2_REGISTER_URL}
+            - CKAN_OAUTH2_RESET_URL=${CKAN_OAUTH2_RESET_URL}
+            - CKAN_OAUTH2_EDIT_URL=${CKAN_OAUTH2_EDIT_URL}
+            - CKAN_OAUTH2_AUTHORIZATION_ENDPOINT=${CKAN_OAUTH2_AUTHORIZATION_ENDPOINT}
+            - CKAN_OAUTH2_TOKEN_ENDPOINT=${CKAN_OAUTH2_TOKEN_ENDPOINT}
+            - CKAN_OAUTH2_PROFILE_API_URL=${CKAN_OAUTH2_PROFILE_API_URL}
+            - CKAN_OAUTH2_CLIENT_ID=${CKAN_OAUTH2_CLIENT_ID}
+            - CKAN_OAUTH2_CLIENT_SECRET=${CKAN_OAUTH2_CLIENT_SECRET}
+            - CKAN_OAUTH2_SCOPE=${CKAN_OAUTH2_SCOPE}
+            - CKAN_OAUTH2_REMEMBERER_NAME=${CKAN_OAUTH2_REMEMBERER_NAME}
+            - CKAN_OAUTH2_PROFILE_API_USER_FIELD=${CKAN_OAUTH2_PROFILE_API_USER_FIELD}
+            - CKAN_OAUTH2_PROFILE_API_FULLNAME_FIELD=${CKAN_OAUTH2_PROFILE_API_FULLNAME_FIELD}
+            - CKAN_OAUTH2_PROFILE_API_MAIL_FIELD=${CKAN_OAUTH2_PROFILE_API_MAIL_FIELD}
+            - CKAN_OAUTH2_AUTHORIZATION_HEADER=${CKAN_OAUTH2_AUTHORIZATION_HEADER}
+            - CKAN_OAUTH2_LEGACY_IDM=${CKAN_OAUTH2_LEGACY_IDM}
+            # DON'T USE THIS SETTING ON PRODUCTION!
+            - OAUTHLIB_INSECURE_TRANSPORT=True
+
+            # Private datasets
+            - CKAN_PRIVATEDATASETS_ENABLED=true
+            - CKAN_PRIVATEDATASETS_SHOW_ACQUIRE_URL_ON_CREATE=${CKAN_PRIVATEDATASETS_SHOW_ACQUIRE_URL_ON_CREATE}
+            - CKAN_PRIVATEDATASETS_SHOW_ACQUIRE_URL_ON_EDIT=${CKAN_PRIVATEDATASETS_SHOW_ACQUIRE_URL_ON_EDIT}
+            - CKAN_PRIVATEDATASETS_PARSER=${CKAN_PRIVATEDATASETS_PARSER}
+
+            # Right time context
+            - CKAN_RIGHT_TIME_CONTEXT_ENABLED=true
+            - CKAN_RIGHT_TIME_CONTEXT_VERIFY_REQUESTS=${CKAN_RIGHT_TIME_CONTEXT_VERIFY_REQUESTS}
+
+            # WireCloud view
+            - CKAN_WIRECLOUD_VIEW_URL=${CKAN_WIRECLOUD_VIEW_URL}
+            - CKAN_WIRECLOUD_VIEW_EDITOR_DASHBOARD=${CKAN_WIRECLOUD_VIEW_EDITOR_DASHBOARD}
+
+            # BAE publisher
+            - CKAN_BAEPUBLISHER_STORE_URL=${CKAN_BAEPUBLISHER_STORE_URL}
+
+    ckan_datapusher:
+        restart: always
+        image: clementmouchet/datapusher
+
+    ckan_solr:
+        restart: always
+        image: ckan/solr
+        volumes:
+            - ./volumes/ckan_solr-data/:/opt/solr/server/solr/ckan/data
+
+    ckan_postgres:
+        restart: always
+        image: ckan/postgresql
+        environment:
+            - DS_RO_PASS=${DATASTORE_READONLY_PASSWORD}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        volumes:
+            - ./volumes/ckan_postgres-data:/var/lib/postgresql/data
+
+    ckan_redis:
+        restart: always
+        image: redis:latest
+
+    wc_nginx:
+        restart: always
+        image: nginx:latest
+        ports:
+            - 80:80
+        volumes:
+            - ./artifacts/wc/nginx.conf:/etc/nginx/nginx.conf:ro
+            - ./volumes/wirecloud-static:/var/www/static:ro
+        links:
+            - wirecloud
+
+
+    wc_postgres:
+        restart: always
+        image: postgres:latest
+        environment:
+            - POSTGRES_PASSWORD=wirepass   # Change this password!
+        volumes:
+            - ./volumes/wc_postgres-data:/var/lib/postgresql/data
+
+    wc_elasticsearch:
+        restart: always
+        image: elasticsearch:2.4
+        volumes:
+            - ./volumes/wc_elasticsearch-data:/usr/share/elasticsearch/data
+        command: elasticsearch -Des.index.max_result_window=50000
+
+    wc_memcached:
+        restart: always
+        image: memcached:1
+        command: memcached -m 2048m
+
+    wirecloud:
+        restart: always
+        image: fiware/wirecloud
+        depends_on:
+            - wc_postgres
+            - wc_elasticsearch
+            - wc_memcached
+        environment:
+            - DEBUG=True
+            - DEFAULT_THEME=wirecloud.defaulttheme
+            - DB_HOST=wc_postgres
+            - DB_PASSWORD=wirepass   # Change this password!
+            - FORWARDED_ALLOW_IPS=*
+            - ELASTICSEARCH2_URL=http://wc_elasticsearch:9200/
+            - MEMCACHED_LOCATION=wc_memcached:11211
+            # Uncomment the following environment variables to enable IDM integration
+            #- FIWARE_IDM_SERVER=${FIWARE_IDM_SERVER}
+            #- SOCIAL_AUTH_FIWARE_KEY=${SOCIAL_AUTH_FIWARE_KEY}
+            #- SOCIAL_AUTH_FIWARE_SECRET=${SOCIAL_AUTH_FIWARE_SECRET}
+            - FIWARE_IDM_SERVER=${FIWARE_IDM_SERVER}
+            - SOCIAL_AUTH_FIWARE_KEY=${SOCIAL_AUTH_FIWARE_KEY}
+            - SOCIAL_AUTH_FIWARE_SECRET=${SOCIAL_AUTH_FIWARE_SECRET}
+        volumes:
+            - ./volumes/wirecloud-data:/opt/wirecloud_instance/data
+            - ./volumes/wirecloud-static:/var/www/static
+            - ./artifacts/common-widgets:/opt/common-widgets
+    keyrock:
+        image: fiware/idm
+        container_name: fiware-keyrock
+        hostname: keyrock
+        depends_on:
+            - mysql-db
+        ports:
+            - "3005:3005"
+            - "3443:3443"
+        environment:
+            - DATABASE_HOST=mysql-db
+            - IDM_DB_PASS_FILE=/run/secrets/my_secret_data
+            - IDM_DB_USER=root
+            - IDM_HOST=http://keyrock:3005
+            - IDM_PORT=3005
+            - IDM_HTTPS_ENABLED=${IDM_HTTPS_ENABLED}
+            - IDM_HTTPS_PORT=3443
+            - IDM_ADMIN_USER=admin
+            - IDM_ADMIN_EMAIL=admin@test.com
+            - IDM_ADMIN_PASS=1234
+        secrets:
+            - my_secret_data
+    mysql-db:
+        restart: always
+        image: mysql:5.7
+        hostname: mysql-db
+        container_name: db-mysql
+        #expose:
+        #   - "3306"
+        #ports:
+        #   - "3306:3306"
+        #networks:
+        #    default:
+        environment:
+            - "MYSQL_ROOT_PASSWORD_FILE=/run/secrets/my_secret_data"
+            #- "MYSQL_ROOT_HOST=172.18.1.5"
+        volumes:
+            - ./volumes/mysql-db:/var/lib/mysql
+        secrets:
+            - my_secret_data
+
+secrets:
+    my_secret_data:
+        file: ./artifacts/idm/secrets.txt
