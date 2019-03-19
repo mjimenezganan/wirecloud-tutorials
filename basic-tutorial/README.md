@@ -1,10 +1,24 @@
 # Instructions
 
+## 0. Local domain resolution
+
+This tutorial uses, in order to be more clear, different aliases to `localhost` for the different services started. As a consequence, URLs pointing to `http://wirecloud` or `http://keyrock` are used on the tutorial for referring to those services. This could be done with `localhost` links, but it wouldn't be so clear.
+
+Moreover, this structure simplifies the migration to real domains for each component. This is another reason to maintain these aliases.
+
+In order to use tutorial links as they are written (so there is no need to translate all of them to `localhost` whenever it appears `wirecloud` or `keyrock`, a local alias has to be inserted in the `/etc/hosts` file:
+
+    127.0.0.1   localhost ckan wirecloud keyrock
+
+However, if deployed on different machine having all of them their own IP address or hostname, this one can be used to follow tutorial links without rewritting:
+
+    (X.X.X.X | mymachine.example.org)     ckan wirecloud keyrock
+
 ## 1. Launch the IdM
 
 The first task is to launch the Identity Manager and to create two applications on it that will authenticate against its users: ckan and wirecloud.
 
-For launching only the IdM (using configs on Keyrock section of `.env`` such as disable HTTPS):
+For launching only the IdM (using configs on Keyrock section of `.env` such as disable HTTPS):
 
     docker-compose up -d keyrock
 
